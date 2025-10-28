@@ -1,0 +1,544 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Mr Oza demo POP3 SMTP and IMAP — Single File</title>
+
+<!-- Fonts & Icons -->
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+<!-- Materialize CSS for modal/toast/grid -->
+<link href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css" rel="stylesheet"/>
+
+<style>
+  /* ================= THEME ================= */
+  :root{
+    --bg:#f3f5f8; --card:#ffffff; --text:#1c2430; --muted:#607089;
+    --accent:#2962ff; --accent-2:#00c4ff; --shadow: 0 10px 30px rgba(16,24,40,.10);
+    --border: rgba(28,36,48,.08); --btn-text:#fff; --glass: rgba(255,255,255,.6);
+  }
+  .dark{
+    --bg:#0d1117; --card:#0f1724; --text:#e6edf3; --muted:#8ea1b3;
+    --accent:#6aa3ff; --accent-2:#2ad7ff; --shadow: 0 10px 30px rgba(0,0,0,.35);
+    --border: rgba(230,237,243,.08); --btn-text:#0d1117; --glass: rgba(255,255,255,.08);
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; font-family:Inter,system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+    color:var(--text); background:var(--bg);
+    transition: background .35s ease, color .35s ease;
+  }
+  .container{max-width:1100px;margin:0 auto;padding:20px}
+
+  /* Top app bar */
+  header.nav{
+    position: sticky; top:0; z-index:20;
+    backdrop-filter: saturate(1.2) blur(10px);
+    background: linear-gradient(90deg, transparent, var(--glass), transparent);
+    border-bottom: 1px solid var(--border);
+  }
+  .nav-inner{ display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 0; }
+  .brand{ display:flex; align-items:center; gap:12px; font-weight:800; letter-spacing:.3px; }
+  .brand .logo{
+    width:40px; height:40px; border-radius:12px;
+    background: radial-gradient(120% 120% at 20% 20%, var(--accent), var(--accent-2));
+    box-shadow: var(--shadow);
+  }
+  .mode-toggle{ display:flex; align-items:center; gap:8px; padding:6px 10px; border-radius:10px; border:1px solid var(--border); background: var(--card) }
+
+  /* Material button with ripple */
+  .md-btn{
+    --h:44px; height:var(--h);
+    display:inline-grid; place-items:center;
+    padding:0 18px; border-radius:10px; border:0;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    color: var(--btn-text); font-weight:700; letter-spacing:.3px;
+    box-shadow: 0 6px 18px rgba(41,98,255,.25);
+    cursor:pointer; position:relative; overflow:hidden; transform: translateZ(0);
+  }
+  .md-btn:active{ transform: translateY(1px) }
+  .md-btn .material-icons{ font-size:18px; vertical-align:-3px; margin-right:6px }
+  .md-btn .ripple{
+    position:absolute; border-radius:50%; transform:scale(0);
+    animation:ripple .6s linear; background:rgba(255,255,255,.5);
+  }
+  @keyframes ripple{ to{ transform:scale(4); opacity:0 } }
+
+  /* =============== HERO (3D cube) =============== */
+  .hero{
+    display:grid; grid-template-columns: 1.2fr .8fr; gap:28px;
+    padding:24px 0 10px;
+  }
+  @media (max-width: 900px){ .hero{ grid-template-columns: 1fr; } }
+  .hero .kicker{ color:var(--muted); font-weight:600; margin-bottom:6px }
+  .hero h1{ line-height:1.1; margin:0 0 12px; font-size: clamp(28px, 4vw, 42px) }
+  .hero p{ color:var(--muted); margin: 0 0 16px }
+  .stack{ display:flex; gap:12px; flex-wrap:wrap }
+
+  .cube-wrap{ perspective:1000px; display:grid; place-items:center; min-height:320px }
+  .cube{
+    position: relative; width: 220px; height: 220px; transform-style: preserve-3d;
+    animation: spin 12s linear infinite;
+  }
+  @keyframes spin{
+    0%   { transform: rotateX(-18deg) rotateY(0deg); }
+    50%  { transform: rotateX(-18deg) rotateY(180deg); }
+    100% { transform: rotateX(-18deg) rotateY(360deg); }
+  }
+  .face{
+    position:absolute; inset:0; display:grid; place-items:center; text-align:center;
+    font-weight:800; color:var(--text);
+    background: linear-gradient(160deg, var(--card), rgba(255,255,255,0));
+    border:1px solid var(--border); box-shadow: var(--shadow); border-radius:18px;
+    backdrop-filter: blur(6px) saturate(1.2);
+  }
+  .face .label{ display:flex; flex-direction:column; align-items:center; gap:6px }
+  .face .material-icons{ font-size:40px; color:var(--accent) }
+  .cube .front  { transform: translateZ(110px) }
+  .cube .back   { transform: rotateY(180deg) translateZ(110px) }
+  .cube .right  { transform: rotateY(90deg)  translateZ(110px) }
+  .cube .left   { transform: rotateY(-90deg) translateZ(110px) }
+  .cube .top    { transform: rotateX(90deg)  translateZ(110px) }
+  .cube .bottom { transform: rotateX(-90deg) translateZ(110px) }
+
+  /* =============== EMAIL DEMO SECTION =============== */
+  .app-wrap{ display:grid; grid-template-columns: 280px 1fr; gap:16px; margin-top:8px; }
+  @media(max-width: 992px){ .app-wrap{ grid-template-columns: 1fr; } }
+  .toolbar{ display:flex; align-items:center; gap:8px; padding:8px 12px; border-bottom:1px solid var(--border); }
+  .list-and-view{ display:grid; grid-template-columns: 420px 1fr; gap:10px; }
+  @media(max-width:1200px){ .list-and-view{ grid-template-columns: 1fr; } }
+  .msg-list{ max-height: 65vh; overflow:auto; }
+  .msg-item{ cursor:pointer; padding:12px; }
+  .msg-item:hover{ background:rgba(0,0,0,.03) }
+  .dark .msg-item:hover{ background:rgba(255,255,255,.06) }
+  .msg-item .title{ font-weight:600; }
+  .msg-item .meta{ color:var(--muted); font-size:.85rem; }
+  .msg-item.active{ background:#e8f0fe; }
+  .dark .msg-item.active{ background:#0f213d; }
+  .msg-view{ max-height:65vh; overflow:auto; padding:16px 20px; background:var(--card); border:1px solid var(--border); border-radius:12px }
+
+  /* Info cards */
+  .cards{ display:grid; grid-template-columns: repeat(3, 1fr); gap:18px; margin: 6px 0 20px }
+  @media (max-width: 900px){ .cards{ grid-template-columns: 1fr; } }
+  .cardx{ background: var(--card); border:1px solid var(--border); border-radius:16px; padding:18px; box-shadow: var(--shadow) }
+  .cardx h3{ margin: 0 0 10px; font-size: 18px }
+  .meta{ color:var(--muted); font-size: 14px }
+</style>
+</head>
+<body>
+
+<!-- Sticky top bar with theme toggle -->
+<header class="nav">
+  <div class="container nav-inner">
+    <div class="brand">
+      <div class="logo" aria-hidden="true"></div>
+      <div>Mr Oza demo POP3 SMTP and IMAP</div>
+    </div>
+    <div class="mode-toggle">
+      <span class="material-icons" id="modeIcon">dark_mode</span>
+      <strong id="modeLabel">Dark</strong>
+      <button class="md-btn" id="modeBtn" style="height:36px;padding:0 12px">
+        <span class="material-icons">brightness_6</span> Toggle
+      </button>
+    </div>
+  </div>
+</header>
+
+<main class="container">
+  <!-- HERO with 3D cube -->
+  <section class="hero">
+    <div class="hero-copy">
+      <div class="kicker">Material • 3D • Dark/Light</div>
+      <h1>Gmail-style UI + SMTP/IMAP/POP3 demo (front-end simulation)</h1>
+      <p>Click <b>Compose</b> to “send” (adds to local inbox), use <b>IMAP</b> to list/read, and <b>POP3</b> to show headers. Firebase Analytics is initialized below.</p>
+      <div class="stack">
+        <button class="md-btn" id="primaryBtn"><span class="material-icons">send</span>Material Button</button>
+        <button class="md-btn" id="ghostBtn" style="background:linear-gradient(135deg,#8e9eab,#eef2f3); color:#0d1117;">
+          <span class="material-icons">bolt</span>Secondary
+        </button>
+      </div>
+    </div>
+    <div class="cube-wrap">
+      <div class="cube" id="cube">
+        <div class="face front"><div class="label"><span class="material-icons">outgoing_mail</span>SMTP</div></div>
+        <div class="face back"><div class="label"><span class="material-icons">mail</span>IMAP</div></div>
+        <div class="face right"><div class="label"><span class="material-icons">markunread_mailbox</span>POP3</div></div>
+        <div class="face left"><div class="label"><span class="material-icons">mail_lock</span>AUTH</div></div>
+        <div class="face top"><div class="label"><span class="material-icons">cloud</span>Firebase</div></div>
+        <div class="face bottom"><div class="label"><span class="material-icons">code</span>Front-End</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Info cards blurb -->
+  <section class="cards">
+    <div class="cardx">
+      <h3>Material Button</h3>
+      <p class="meta">Gradient + ripple. Pure CSS/JS.</p>
+    </div>
+    <div class="cardx">
+      <h3>3D Cube</h3>
+      <p class="meta">CSS transforms & perspective (auto-rotates; pauses on mouse move).</p>
+    </div>
+    <div class="cardx">
+      <h3>Dark / Light</h3>
+      <p class="meta">CSS variables + localStorage persistence.</p>
+    </div>
+  </section>
+
+  <!-- EMAIL DEMO -->
+  <section class="app-wrap">
+    <!-- Sidebar -->
+    <aside>
+      <div class="cardx">
+        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap">
+          <a class="md-btn modal-trigger" href="#composeModal"><span class="material-icons">edit</span>Compose</a>
+          <a id="resetBtn" class="md-btn" style="background:linear-gradient(135deg,#c94b4b,#4b134f)">
+            <span class="material-icons">restart_alt</span>Reset</a>
+        </div>
+      </div>
+      <div class="cardx">
+        <h3>Folders</h3>
+        <div class="collection" style="border:1px solid var(--border); border-radius:12px; overflow:hidden">
+          <a class="collection-item active">Inbox <span id="inboxCount" class="badge">0</span></a>
+          <a class="collection-item">Sent</a>
+          <a class="collection-item">Drafts</a>
+          <a class="collection-item">Archive</a>
+          <a class="collection-item">Spam</a>
+          <a class="collection-item">Trash</a>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main -->
+    <section>
+      <div class="cardx">
+        <div class="toolbar">
+          <button class="md-btn" id="imapLoad"><span class="material-icons">refresh</span>IMAP: Load last 10</button>
+          <button class="md-btn" id="popLoad" style="background:linear-gradient(135deg,#1f4037,#99f2c8)">
+            <span class="material-icons">inventory_2</span>POP3: Headers</button>
+          <span class="meta" id="statusText" style="margin-left:auto;"></span>
+        </div>
+        <div class="list-and-view" style="margin-top:12px">
+          <!-- Message list -->
+          <div class="msg-list cardx" style="padding:0">
+            <ul id="imapList" class="collection" style="margin:0;"></ul>
+            <ul id="popList" class="collection" style="margin:0; display:none;"></ul>
+          </div>
+
+          <!-- Message view -->
+          <div class="msg-view">
+            <h5 id="v-subject" style="margin:0 0 6px">Select a message</h5>
+            <div class="meta" id="v-meta"></div>
+            <div id="v-body" style="margin-top:12px;">Click any message on the left to preview here.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </section>
+
+  <!-- Firebase status -->
+  <section class="cardx" style="margin-top:18px">
+    <h3 style="margin:0 0 8px">Firebase Status</h3>
+    <div class="meta">This page initializes your Firebase app (Analytics). No Firestore/Storage/Auth is required for this front-end simulation.</div>
+    <div id="fbStatus" class="meta" style="margin-top:10px">Initializing…</div>
+  </section>
+</main>
+
+<!-- Compose Modal -->
+<div id="composeModal" class="modal">
+  <div class="modal-content">
+    <h5>Compose (Simulated SMTP)</h5>
+    <div class="row">
+      <div class="input-field col s12">
+        <input id="to" type="email" placeholder="student@class.local"/>
+        <label for="to" class="active">To</label>
+      </div>
+      <div class="input-field col s12">
+        <input id="subject" type="text" placeholder="Hello from Mr Oza"/>
+        <label for="subject" class="active">Subject</label>
+      </div>
+      <div class="input-field col s12">
+        <textarea id="body" class="materialize-textarea" placeholder="<p>Hi there…</p>"></textarea>
+        <label for="body" class="active">Message (HTML allowed)</label>
+      </div>
+    </div>
+  </div>
+  <div class="modal-footer">
+    <a href="#!" class="modal-close waves-effect btn-flat">Cancel</a>
+    <a href="#!" id="sendNow" class="waves-effect btn blue">Send</a>
+  </div>
+</div>
+
+<!-- Materialize JS -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
+
+<!-- ================= Firebase (ESM via CDN) ================= -->
+<script type="module">
+  // Import the functions you need from the SDKs you need
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
+  import { getAnalytics, isSupported as analyticsSupported } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-analytics.js";
+
+  // Your web app's Firebase configuration (as provided)
+  const firebaseConfig = {
+    apiKey: "AIzaSyCCC_wEUwVazuuDAhEADO5xtPsqaGJIXc8",
+    authDomain: "imapandpop3-1eb35.firebaseapp.com",
+    projectId: "imapandpop3-1eb35",
+    storageBucket: "imapandpop3-1eb35.firebasestorage.app",
+    messagingSenderId: "39806414026",
+    appId: "1:39806414026:web:48a1f5fe59cdfc21ec5833",
+    measurementId: "G-YMX798B5QZ"
+  };
+
+  const fbStatus = document.getElementById('fbStatus');
+  try {
+    const app = initializeApp(firebaseConfig);
+    const supported = await analyticsSupported().catch(()=>false);
+    if (supported) {
+      getAnalytics(app);
+      fbStatus.textContent = "Initialized (Analytics enabled) ✅";
+    } else {
+      fbStatus.textContent = "Initialized (Analytics not supported in this context) ⚠️";
+    }
+  } catch (e) {
+    fbStatus.textContent = "Firebase init error: " + e.message;
+  }
+</script>
+
+<!-- ================= App Logic (SIMULATION using localStorage) ================= -->
+<script>
+  // Theme toggle
+  const root = document.documentElement;
+  const modeBtn = document.getElementById('modeBtn');
+  const modeIcon = document.getElementById('modeIcon');
+  const modeLabel = document.getElementById('modeLabel');
+  function setMode(mode){
+    if(mode === 'dark'){
+      root.classList.add('dark'); modeIcon.textContent='light_mode'; modeLabel.textContent='Light';
+      localStorage.setItem('mode','dark');
+    } else {
+      root.classList.remove('dark'); modeIcon.textContent='dark_mode'; modeLabel.textContent='Dark';
+      localStorage.setItem('mode','light');
+    }
+  }
+  setMode(localStorage.getItem('mode') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
+  modeBtn.addEventListener('click', () => setMode(root.classList.contains('dark') ? 'light' : 'dark'));
+
+  // Material ripple
+  function addRipple(e){
+    const btn = e.currentTarget;
+    const circle = document.createElement('span');
+    const d = Math.max(btn.clientWidth, btn.clientHeight);
+    circle.style.width = circle.style.height = d + 'px';
+    const rect = btn.getBoundingClientRect();
+    circle.style.left = (e.clientX - rect.left - d/2) + 'px';
+    circle.style.top  = (e.clientY - rect.top  - d/2) + 'px';
+    circle.classList.add('ripple');
+    btn.appendChild(circle);
+    setTimeout(()=> circle.remove(), 600);
+  }
+  document.querySelectorAll('.md-btn').forEach(b => b.addEventListener('click', addRipple));
+
+  // 3D cube tilt pause on mouse move
+  const cube = document.getElementById('cube');
+  let tiltX = -18, tiltY = 0;
+  function lerp(a,b,t){ return a + (b-a)*t }
+  function animate(){ cube.style.transform = `rotateX(${tiltX}deg) rotateY(${tiltY}deg)`; requestAnimationFrame(animate); }
+  animate();
+  cube.parentElement.addEventListener('mousemove', (e) => {
+    const rect = cube.parentElement.getBoundingClientRect();
+    const nx = (e.clientY - rect.top)/rect.height;   // 0..1
+    const ny = (e.clientX - rect.left)/rect.width;   // 0..1
+    tiltX = lerp(tiltX, (nx*40 - 20), .25);
+    tiltY = lerp(tiltY, (ny*60 - 30), .25);
+    cube.style.animationPlayState = 'paused';
+    clearTimeout(cube._resume); cube._resume = setTimeout(()=> { cube.style.animationPlayState = 'running'; }, 600);
+  });
+
+  // ================= SIMULATED MAILBOX (localStorage) =================
+  const LS_KEY = "oza_mailbox_v1";
+
+  function loadBox(){
+    try { return JSON.parse(localStorage.getItem(LS_KEY)) || []; }
+    catch{ return []; }
+  }
+  function saveBox(arr){
+    localStorage.setItem(LS_KEY, JSON.stringify(arr));
+  }
+  function makeHeaders(m){
+    const d = new Date(m.date);
+    return [
+      `Date: ${d.toUTCString()}`,
+      `From: ${m.from}`,
+      `To: ${m.to}`,
+      `Subject: ${m.subject}`,
+      `Message-ID: ${m.id}`,
+      `X-Demo: LocalStorage`
+    ].join("\r\n") + "\r\n\r\n";
+  }
+  function seedIfEmpty(){
+    const box = loadBox();
+    if (box.length) return;
+    const now = Date.now();
+    const sample = [
+      {from:"AOIT Admin <admin@school.local>", to:"Mr Oza <oza@class.local>", subject:"Welcome to the Inbox", html:"<p><b>IMAP</b> lists & reads; <b>POP3</b> shows <i>headers</i>.</p>", text:"IMAP lists & reads; POP3 shows headers."},
+      {from:"Helpdesk <help@class.local>", to:"Mr Oza <oza@class.local>", subject:"Ticket #1024 update", html:"<p>Your ticket was updated. <a href='#'>View</a>.</p>", text:"Your ticket was updated."},
+      {from:"Cisco Program <cisco@class.local>", to:"Mr Oza <oza@class.local>", subject:"Networking Essentials reminder", html:"<p>Complete the lab by <b>Friday</b>.</p>", text:"Complete the lab by Friday."}
+    ];
+    const seeded = sample.map((s,i)=>({
+      id: crypto.randomUUID ? crypto.randomUUID() : String(now - i),
+      date: now - i*3600_000,
+      from: s.from, to: s.to, subject: s.subject,
+      html: s.html, text: s.text
+    }));
+    saveBox(seeded);
+  }
+
+  // “SMTP send” → add to mailbox
+  async function smtpSend(to, subject, html){
+    const box = loadBox();
+    const msg = {
+      id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()),
+      date: Date.now(),
+      from: "Mr Oza <demo@local>",
+      to, subject,
+      html, text: (html || "").replace(/<[^>]+>/g,"")
+    };
+    msg.headers = makeHeaders(msg);
+    box.unshift(msg);
+    saveBox(box);
+    return msg.id;
+  }
+
+  // “IMAP list”
+  async function imapList(){
+    const items = loadBox().slice(0, 10);
+    return items.map(m => ({ id: m.id, subject: m.subject, from: m.from, date: m.date, flags: [] }));
+  }
+
+  // “IMAP get one”
+  async function imapGet(id){
+    const m = loadBox().find(x => x.id === id);
+    if (!m) throw new Error("Not found");
+    return m;
+  }
+
+  // “POP3 headers”
+  async function pop3Headers(){
+    const box = loadBox().slice(0, 10);
+    return box.map((m, i) => ({ index: i+1, headers: m.headers || makeHeaders(m) }));
+  }
+
+  // ================= UI RENDERING =================
+  const $ = (s) => document.querySelector(s);
+  const esc = (s) => String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+
+  function showIMAPList(items){
+    const list = $("#imapList"), pop = $("#popList");
+    list.style.display = ""; pop.style.display = "none"; list.innerHTML = "";
+    $("#inboxCount").textContent = String(items.length || 0);
+    if (!items.length){ list.innerHTML = "<li class='collection-item'>No messages.</li>"; return; }
+    items.forEach((m, idx) => {
+      const li = document.createElement("li");
+      li.className = "collection-item msg-item" + (idx===0 ? " active": "");
+      li.dataset.id = m.id;
+      li.innerHTML = "<div class='title'>"+esc(m.subject || "(no subject)")+"</div>" +
+        "<div class='meta'>"+esc(m.from || "")+" — "+ new Date(m.date).toLocaleString() +"</div>";
+      li.addEventListener("click", async () => {
+        document.querySelectorAll(".msg-item").forEach(el => el.classList.remove("active"));
+        li.classList.add("active");
+        const msg = await imapGet(m.id);
+        renderViewer(msg);
+      });
+      list.appendChild(li);
+    });
+  }
+  function showPOPList(items){
+    const list = $("#popList"), imap = $("#imapList");
+    list.style.display = ""; imap.style.display = "none"; list.innerHTML = "";
+    if (!items.length){ list.innerHTML = "<li class='collection-item'>No messages.</li>"; return; }
+    items.forEach((m) => {
+      const headers = m.headers || "";
+      const subj = /\nSubject:\s*(.*?)(\r|\n|$)/i.exec(headers) || [];
+      const from = /\nFrom:\s*(.*?)(\r|\n|$)/i.exec(headers) || [];
+      const date = /\nDate:\s*(.*?)(\r|\n|$)/i.exec(headers) || [];
+      const li = document.createElement("li");
+      li.className = "collection-item msg-item";
+      li.innerHTML = "<div class='title'>"+esc(subj[1] || "(no subject)")+"</div>" +
+        "<div class='meta'>"+esc(from[1] || "") + (date[1] ? " — " + esc(date[1]) : "") + " — idx "+ esc(m.index) +"</div>";
+      list.appendChild(li);
+    });
+  }
+  function renderViewer(m){
+    $("#v-subject").textContent = m.subject || "(no subject)";
+    $("#v-meta").textContent = (m.from || "") + " — " + new Date(m.date).toLocaleString() + " — ID " + m.id;
+    $("#v-body").innerHTML = m.html || ("<pre style='white-space:pre-wrap'>"+esc(m.text || "")+"</pre>");
+  }
+
+  // ================= Wire up buttons =================
+  document.addEventListener("DOMContentLoaded", async () => {
+    // Materialize modal
+    document.querySelectorAll(".modal").forEach(el => M.Modal.init(el));
+
+    // Seed sample data once
+    seedIfEmpty();
+
+    // Load defaults into list
+    const items = await imapList();
+    showIMAPList(items);
+    if (items[0]) renderViewer(await imapGet(items[0].id));
+
+    document.getElementById("imapLoad").addEventListener("click", async () => {
+      document.getElementById("statusText").textContent = "Loading IMAP…";
+      try{
+        const items = await imapList();
+        showIMAPList(items);
+        if (items[0]) renderViewer(await imapGet(items[0].id));
+      } finally { document.getElementById("statusText").textContent = ""; }
+    });
+
+    document.getElementById("popLoad").addEventListener("click", async () => {
+      document.getElementById("statusText").textContent = "Loading POP3 headers…";
+      try{
+        const items = await pop3Headers();
+        showPOPList(items);
+      } finally { document.getElementById("statusText").textContent = ""; }
+    });
+
+    document.getElementById("resetBtn").addEventListener("click", async () => {
+      localStorage.removeItem(LS_KEY);
+      seedIfEmpty();
+      const items = await imapList();
+      showIMAPList(items);
+      if (items[0]) renderViewer(await imapGet(items[0].id));
+      M.toast({html:"Demo reset (localStorage cleared)."});
+    });
+
+    document.getElementById("sendNow").addEventListener("click", async () => {
+      const to = (document.getElementById("to").value || "student@class.local").trim();
+      const subject = (document.getElementById("subject").value || "Hello from the demo").trim();
+      const html = document.getElementById("body").value || "<p>Hi there…</p>";
+      const id = await smtpSend(to, subject, html);
+      M.toast({html:"Sent (simulated). IMAP to refresh."});
+      const items = await imapList();
+      showIMAPList(items);
+      if (items[0]) renderViewer(await imapGet(items[0].id));
+      const modal = M.Modal.getInstance(document.getElementById("composeModal"));
+      modal.close();
+    });
+  });
+</script>
+
+<!-- Optional: first-run tip -->
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    if (!localStorage.getItem('oza_demo_seen')) {
+      M.toast({html:"Tip: Compose → Send (SMTP), then IMAP to load messages.", displayLength: 6000});
+      localStorage.setItem('oza_demo_seen', '1');
+    }
+  });
+</script>
+</body>
+</html>
